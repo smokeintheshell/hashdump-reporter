@@ -2,7 +2,7 @@
 Python utility for parsing secretsdump.py output, written in Python3
 
 ## Description
-`hashdump-reporter.py` was written to help penetration tests with testing and reporting for weak and reused passwords. I wrote this specifically to help my team and I with our password management findings, so the formatted output is tailored to our findings.<p>
+`hashdump-reporter.py` was written to help penetration testers with testing and reporting for weak and reused passwords. I wrote this specifically to help my team and I with our password management findings, so the formatted output is tailored to our findings.<p>
 `hashdump-reporter.py` aims to solve the following challenges in testing and reporting:
 - Parsing NT hashes from either SAM or NTDS for cracking
 - Ingesting output potfiles from hashcat/hashtopolis to identify accounts with weak passwords

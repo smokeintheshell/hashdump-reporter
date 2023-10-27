@@ -300,7 +300,6 @@ def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parse
         if parseUser:
             domReuse, numDomReuse, numDomPw = parseAllReuse(wUsers, allNT, uniqNT)
             tableLines = formatOutput(domReuse, fType="reuseuser")
-            #print(';;; '.join(domReuse[0]['Users']))
             with open(outDomReuse, 'w') as fur:
                 fur.write("{}\n".format(headDomReuse))
                 for tl in tableLines:
@@ -308,7 +307,6 @@ def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parse
                 #for uHash in domReuse:
                     #for u in uHash['Users']:
                         #print("{}\t{}".format(u, uHash['Hash']))
-                        #f4.write("{}\t{}\n".format(u, uHash['Hash']))
             outputFiles['user'] = outDomReuse
 
     elif cParse == "dir":
@@ -358,7 +356,7 @@ def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parse
 def formatOutput(data, fType):
     newTableLines = []
     if fType == "weakuser":
-        # goofy ass math to properly align the columns
+        # goofy math to properly align the columns
         if ((len(data) % 2) == 0):
             nC1 = len(data)//2
         else:
