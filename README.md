@@ -10,6 +10,7 @@ Python utility for parsing secretsdump.py output, written in Python3
 - Identifying hosts reusing passwords for local accounts
 - Generating *meaningful* output on that above points that clients can easily digest and implement remediation for.
 <p>
+
 Generating that *meaningful* output can be big challenge when reporting on credentials, particularly in large Active Directory environments. As long as passwords are being used, some users will inevitably use weak passwords. Additionally, administrators all to often will either use a single account for domain administration that is shared (frequently with a bad password) or will reuse the password for their low-privilege account with their admin account. In large environments, this can result in findings that are hundreds or thousands of lines long simply listing these accounts. When clients scroll through a penetration test report and see these ridiculous tables, they'll frequently skip over the finding altogether. To assist clients in implementing proper password controls, `hashdump-reporter.py` generates various output files to provide easily ingestible data that clients can act on.
 
 ## Installation
