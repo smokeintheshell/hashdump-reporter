@@ -49,8 +49,6 @@ class winUser:
 def parseArgs():
     ap = argparse.ArgumentParser(description='Secretsdump Report Generator', formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=50))
     group = ap.add_mutually_exclusive_group()
-    #ap.add_argument('-i', '--ntds', required=False, dest='inFile', metavar='inputFile', action='store', help='input file')
-    #ap.add_argument('-d', '--dir', dest='inDir', metavar='inputDir', action='store', help='input dir for local hashes')
     group.add_argument('-i', '--ntds', dest='inFile', metavar='inputFile', action='store', help='input NTDS/SAM file')
     group.add_argument('-d', '--dir', dest='inDir', metavar='inputDir', action='store', help='directory of SAM files to parse')
     ap.add_argument('-o', '--outfile', dest='outFile', metavar='outputFile', action='store', help='prepend output file name')
@@ -159,6 +157,7 @@ def parseFile(inFile, outFile, adminFile, parseHistory=False, parseComputer=Fals
         # skip companyName for instances where the tester added a new account
         if ((not len(companyName) == 0) and companyName in nUser):
             continue
+        # skip computer account hashes unles -computer
         if (("$" in nUser) and not (parseComputer)):
             continue
         # grab every NT hash for uniqhashes file, then ditch all the computer accounts
