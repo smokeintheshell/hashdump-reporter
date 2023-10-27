@@ -73,7 +73,7 @@ foreach ($group in $admingroups) { $adminusers += get-adgroupmember -rec $group 
 | 10.10.10.20 | HOST2 | LocalAdmin | 8846f7eaee8fb117ad06bdd830b7586c |
 
 #### Domain
-Output format 1, to list all accounts with reused passwords:
+Output format 1, to list all accounts with reused passwords:<p>
 `-user`
 
 | Account | Password Hash |
@@ -81,7 +81,7 @@ Output format 1, to list all accounts with reused passwords:
 | CONTOSO\Administrator | 8846f7eaee8fb117ad06bdd830b7586c |
 | CONTOSO\JohnDoe | 8846f7eaee8fb117ad06bdd830b7586c |
 
-Output format 2, to list only password reuse among administrators and low-privilege accounts (`;;; ` is intended to be a unique separator for doing a find/replace operation in Excel/Word):
+Output format 2, to list only password reuse among administrators and low-privilege accounts (`;;; ` is intended to be a unique separator for doing a find/replace operation in Excel/Word):<p>
 `-admin`
 
 | Admin Accounts | User Accounts | Password Hash |
