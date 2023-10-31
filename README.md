@@ -87,7 +87,7 @@ Simply running `hashdump-reporter.py -i <NTDS/SAM>` will generate a parsed TSV o
 
 #### Domain
 Output format 1, to list all accounts with reused passwords:<p>
-`-user`
+`-user`<p>
 `secretsdump-parsed-pw-reuse-all.tsv`
 
 | Account | Password Hash |
@@ -96,7 +96,7 @@ Output format 1, to list all accounts with reused passwords:<p>
 | CONTOSO\JohnDoe | 8846f7eaee8fb117ad06bdd830b7586c |
 
 Output format 2, to list only password reuse among administrators and low-privilege accounts (`;;; ` is intended to be a unique separator for doing a find/replace operation in Excel/Word):<p>
-`-admin -l adminsFile`
+`-admin -l adminsFile`<p>
 `secretsdump-parsed-pw-reuse-admin.tsv`
 
 | Admin Accounts | User Accounts | Password Hash |
@@ -104,7 +104,7 @@ Output format 2, to list only password reuse among administrators and low-privil
 | CONTOSO\Administrator;;; CONTOSO\WebAdmin;;; CONTOSO\ServerAdmin | CONTOSO\JohnDoe;;; CONTOSO\PlainJane | 8846f7eaee8fb117ad06bdd830b7586c |
 
 ### Weak Passwords
-Requires `-p <potFile>`. The output format is the same for parsing all accounts and just administrator accounts (requires `-l adminsFile`).
+Requires `-p <potFile>`. The output format is the same for parsing all accounts and just administrator accounts (requires `-l adminsFile`).<p>
 `secretsdump-parsed-weak-pw-[all|admin].tsv`
 
 | Account | \<blank\> | Account |
