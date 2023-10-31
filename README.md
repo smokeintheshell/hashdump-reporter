@@ -55,9 +55,21 @@ foreach ($group in $admingroups) { $adminusers += get-adgroupmember -rec $group 
 
 
 ## Output formats
-`hashdump-reporter.py` will generate output files, in TSV format, based on user supplied arguments for the following:
+`hashdump-reporter.py` will generate output files, in TSV format for reporting files, based on user supplied arguments for the following:
+### Cracking unique NT hashes
+Simply running `hashdump-reporter.py -i <NTDS/SAM>` will generate a parsed TSV output file and a plaintext file of unique NT hashes for submission to hashcat/hashtopolis:<p>
+`secretsdump-parsed.uniqhashes`<p>
+```
+8846f7eaee8fb117ad06bdd830b7586c
+36aa83bdcab3c9fdaf321ca42a31c3fc
+6c9678ef8cf497ef2ea6c91a9f7ecf2a
+31d6cfe0d16ae931b73c59d7e0c089c0
+```
+
+### Reporting Files
 ### Parsed NTDS/SAM
-`-i <NTDS/SAM>`
+`-i <NTDS/SAM>`<p>
+`secretsdump-parsed.tsv`
 
 | Account | RID | LM Hash | NT Hash |
 | --- | --- | --- | --- |
