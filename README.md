@@ -8,10 +8,10 @@ Python utility for parsing secretsdump.py output, written in Python3
 - Ingesting output potfiles from hashcat/hashtopolis to identify accounts with weak passwords
 - Identifying accounts with reused passwords
 - Identifying hosts reusing passwords for local accounts
-- Generating *meaningful* output on that above points that clients can easily digest and implement remediation for.
+- Generating *meaningful* output on the above points that clients can easily digest and implement remediation for.
 <p>
 
-Generating that *meaningful* output can be big challenge when reporting on credentials, particularly in large Active Directory environments. As long as passwords are being used, some users will inevitably use weak passwords. Additionally, administrators all to often will either use a single account for domain administration that is shared (frequently with a bad password) or will reuse the password for their low-privilege account with their admin account. In large environments, this can result in findings that are hundreds or thousands of lines long simply listing these accounts. When clients scroll through a penetration test report and see these ridiculous tables, they'll frequently skip over the finding altogether. To assist clients in implementing proper password controls, `hashdump-reporter.py` generates various output files to provide easily ingestible data that clients can act on.
+Generating that *meaningful* output can be a big challenge when reporting on credentials, particularly in large Active Directory environments. As long as passwords are being used, some users will inevitably use weak passwords. Additionally, administrators all too often will either use a single account for domain administration that is shared (frequently with a bad password) or will reuse the password for their low-privilege account with their admin account. In large environments, this can result in findings that are hundreds or thousands of lines long simply listing these accounts. When clients scroll through a penetration test report and see these ridiculous tables, they'll frequently skip over the finding altogether. To assist clients in implementing proper password controls, `hashdump-reporter.py` generates various output files to provide easily digestible data that clients can act on.
 
 ## Installation
 This tool requires the `pandas` Python package.
@@ -76,6 +76,7 @@ foreach ($group in $admingroups) { $adminusers += get-adgroupmember -rec $group 
 #### Domain
 Output format 1, to list all accounts with reused passwords:<p>
 `-user`
+`secretsdump-parsed-pw-reuse-all.tsv`
 
 | Account | Password Hash |
 | --- | --- |
@@ -83,14 +84,16 @@ Output format 1, to list all accounts with reused passwords:<p>
 | CONTOSO\JohnDoe | 8846f7eaee8fb117ad06bdd830b7586c |
 
 Output format 2, to list only password reuse among administrators and low-privilege accounts (`;;; ` is intended to be a unique separator for doing a find/replace operation in Excel/Word):<p>
-`-admin`
+`-admin -l adminsFile`
+`secretsdump-parsed-pw-reuse-admin.tsv`
 
 | Admin Accounts | User Accounts | Password Hash |
 | --- | --- | --- |
 | CONTOSO\Administrator;;; CONTOSO\WebAdmin;;; CONTOSO\ServerAdmin | CONTOSO\JohnDoe;;; CONTOSO\PlainJane | 8846f7eaee8fb117ad06bdd830b7586c |
 
 ### Weak Passwords
-Requires `-p <potFile>`. The output format is the same for parsing all accounts and just administrator accounts.
+Requires `-p <potFile>`. The output format is the same for parsing all accounts and just administrator accounts (requires `-l adminsFile`).
+`secretsdump-parsed-weak-pw-[all|admin].tsv`
 
 | Account | \<blank\> | Account |
 | --- | --- | --- |
@@ -99,12 +102,12 @@ Requires `-p <potFile>`. The output format is the same for parsing all accounts 
 
 ## Excel Formulas
 `hashdump-reporter.py` can also output helper forumlas for use in the parsed TSV in Excel (or other spreadsheet applications that support the same formulas).<p>
-The formulas are intended to be used with two tabs in Microsoft Excel, where Tab1 is `hashes` and Tab2 is `cracked`, `cracked` having the output of the cracked password TSV. `cracked` would need to be expanded with a third column containing the "method" or wordlist used in hashcat/hashtopolis for Column G to work properly. Column P should have the list of administrators in the domain (samaccountname, not UPN or down-level logon name)
+The formulas are intended to be used with two tabs in Microsoft Excel, where Tab1 is `hashes` and Tab2 is `cracked`, with `cracked` having the output of the cracked password TSV. `cracked` would need to be expanded with a fourth column containing the "method" or wordlist used in hashcat/hashtopolis for Column G to work properly. Column P in `hashes` should have the list of administrators in the domain (samaccountname, not UPN or down-level logon name)
 The formulas would be placed into Row 2 of the `hashes` tab and produce output like the following once dragged down to the end of the spreadsheet:
 
 | A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Account | RID | LM Hash | NT Hash | Reuse | Cracked | Method | Plaintext | Password Length | isBelowMin | isAdmin | | Cracked: 86% | | | Administrator |
+| Account | RID | LM Hash | NT Hash | Reuse | Cracked | Method | Plaintext | Password Length | isBelowMin | isAdmin | | Cracked: 86% | | | Administrators |
 | CONTOSO\Administrator | 500 | aad3b435b51404eeaad3b435b51404ee | 8846f7eaee8fb117ad06bdd830b7586c | 3 | YES | Rockyou | password | 8 | - | YES | | | | | WebAdmin |
 | CONTOSO\JohnDoe | 1000 | aad3b435b51404eeaad3b435b51404ee | 8846f7eaee8fb117ad06bdd830b7586c | 3 | YES | Rockyou | password | 8 | - | - | | | | | ServerAdmin |
 | CONTOSO\PlainJane | 1001 | aad3b435b51404eeaad3b435b51404ee | 8846f7eaee8fb117ad06bdd830b7586c | 3 | YES | Rockyou | password | 8 | - | - | | | |
