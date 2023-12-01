@@ -13,6 +13,7 @@ nullNTpt = "N/A [Blank]"
 extUniq = ".uniqhashes"
 extTsv = ".tsv"
 headNTDS = "User\tRID\tLM\tNT"
+headNTDSStatus = "User\tRID\tLM\tNT\tReuse\tCracked\tMethod\tPlaintext\tLength\tBelowMinLen\tIsAdmin\tAccount Status"
 headAdminReuse = "Admins\tUsers\tNT"
 headDomReuse = "User\tNT"
 headLocal = "IP\tHostname\tAccount\tRID\tLM\tNT"
@@ -34,10 +35,13 @@ formIsAdmin = '=IFERROR(IFNA(IF(RIGHT(A2,LEN(A2)-FIND("\\",A2)) = VLOOKUP((RIGHT
 formCrackPTemp = '="Cracked: " & TEXT(SUM(COUNTIF(F:F,"YES")/<RCRACKP>),"0.0%")'
 formSortIP = ''
 skipSprayUsers = ['krbtgt', 'guest']
+statStrEnabled = "(status=Enabled)"
+statStrDisabled = "(status=Disabled)"
+
 
 # simple class to make referencing users easier as opposed to ordered list or dictionary
 class winUser:
-    def __init__(self, username, rid, lmhash, nthash, isadmin=False, ipaddr=None, plaintext=None, weak=False):
+    def __init__(self, username, rid, lmhash, nthash, isadmin=False, ipaddr=None, plaintext=None, weak=False, status=None):
         self.username                       = username
         self.rid                            = rid
         self.lmhash                         = lmhash
@@ -46,6 +50,7 @@ class winUser:
         self.ipaddr                         = ipaddr
         self.plaintext                      = plaintext
         self.weak                           = weak
+        self.status                         = status
 
 def parseArgs():
     ap = argparse.ArgumentParser(description='Secretsdump Report Generator', formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=50))
@@ -59,6 +64,7 @@ def parseArgs():
     ap.add_argument('-p', '--potfile', dest='potFile', metavar='hc.txt', action='store', help='hashcat/john potfile containing <hash>:<plaintext')
     ap.add_argument('-spray', dest='oSpray', action='store_true', default=False, help='create "<user> <lm:nt>" file for PtH')
     ap.add_argument('-admin', dest='parseAdmin', default=False, action='store_true', help='parse admin reuse')
+    ap.add_argument('-status', dest='parseStat', default=False, action='store_true', help='include account status from `secretsdump.py -user-status` in parsed TSV (ntds only)')
     ap.add_argument('-user', dest='parseUser', default=False, action='store_true', help='parse all domain reuse')
     ap.add_argument('-history', dest='parseHistory', default=False, action='store_true', help='include NTDS password history in parsed NTDS tsv. Does not affect uniqhashes')
     ap.add_argument('-x', '--excel', dest='genExcel', default=False, action='store_true', help='generate excel formulas for tracking document')
@@ -83,7 +89,7 @@ def parseArgs():
     else:
         hParse = False
 
-    return args.inFile, args.outFile, args.inDir, args.adminFile, args.parseAdmin, args.parseUser, args.parseHistory, args.potFile, cParse, hParse, args.genExcel, args.xpassLen, args.oSpray
+    return args.inFile, args.outFile, args.inDir, args.adminFile, args.parseAdmin, args.parseUser, args.parseHistory, args.potFile, cParse, hParse, args.genExcel, args.xpassLen, args.oSpray, args.parseStat
 
 def samError(inDir):
     print("No files found in {inDir} that match the proper convention")
@@ -189,6 +195,10 @@ def parseFile(inFile, outFile, adminFile, parseHistory=False, ip=None):
                 }
         '''
         wUser = winUser(nUser, nRID, nLM, nNT, nAdmin)
+        if statStrEnabled in line:
+            wUser.status = "Enabled"
+        elif statStrDisabled in line:
+            wUser.status = "Disabled"
         wUsers.append(wUser)
 
     uniqNT = pd.Series(allNT).drop_duplicates().tolist() # pandas makes this op pretty simple
@@ -257,7 +267,7 @@ def parseAllReuse(wUsers, allNT, uniqNT):
     del sharedUniq
     return domReuse, numDomReuse, numDomPw
 
-def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parseAdmin=False, parseUser=False, oSpray=False):
+def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parseAdmin=False, parseUser=False, oSpray=False, parseStat=False):
     outUniq = outFile + extUniq
     outTsv = outFile + extTsv
     outAdminReuse = f"{outFile}-pw-reuse-admin{extTsv}"
@@ -273,9 +283,16 @@ def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parse
     numAdminReuseUsers = None
     
     if cParse == "file":
-        tableLines = formatOutput(wUsers, fType="ntds")
+        # if -status specified AND at least one user has status: proceed with ntdsstat. otherwise, ignore -status and use ntds
+        # also, choose tsv header
+        if ((parseStat) and (len([user for user in wUsers if user.status != None]) > 0)):
+            tableLines = formatOutput(wUsers, fType="ntdsstat")
+            cHeadNTDS = headNTDSStatus
+        else:
+            tableLines = formatOutput(wUsers, fType="ntds")
+            cHeadNTDS = headNTDS
         with open(outTsv, 'w') as ftsv:
-            ftsv.write("{}\n".format(headNTDS))
+            ftsv.write("{}\n".format(cHeadNTDS))
             for tl in tableLines:
                 ftsv.write("{}\n".format(tl))
             #for u in wUsers:
@@ -381,6 +398,10 @@ def formatOutput(data, fType):
     elif fType == "ntds":
         for u in data:
             newTableLines.append("{}\t{}\t{}\t{}".format(u.username, u.rid, u.lmhash, u.nthash))
+
+    elif fType == "ntdsstat":
+        for u in data:
+            newTableLines.append("{}\t{}\t{}\t{}\t\t\t\t\t\t\t\t{}".format(u.username, u.rid, u.lmhash, u.nthash, u.status))
     
     elif fType == "spray":
         # skip computers, blank NT, known accounts
@@ -453,8 +474,10 @@ def report(outputFiles, uniqNT, wUsers, cParse, numDomReuse, numDomPw, numAdminR
 
     print(fmsg.strip())
     print(splitGen)
-    print(statsReuse.strip())
-    print(splitGen)
+    # fix always printing statsReuse when not specified
+    if (('admin' in outputFiles.keys()) or ('user' in outputFiles.keys())):
+        print(statsReuse.strip())
+        print(splitGen)
     if hParse:
         print(statsWeak.strip())
         print(splitGen)
@@ -536,7 +559,7 @@ def generateFormulas(wUsers, cParse, xpassLen=8):
     return rFormula
 
 def main():
-    inFile, outFile, inDir, adminFile, parseAdmin, parseUser, parseHistory, potFile, cParse, hParse, genExcel, xpassLen, oSpray = parseArgs()
+    inFile, outFile, inDir, adminFile, parseAdmin, parseUser, parseHistory, potFile, cParse, hParse, genExcel, xpassLen, oSpray, parseStat = parseArgs()
     if cParse == "file":
         if outFile is None:
             outFile = defaultOutFile
@@ -573,7 +596,7 @@ def main():
     print(parseUser)
     print(hParse)
     '''
-    outputFiles, numDomReuse, numDomPw, numAdminReuse, numAdminReuseUsers = writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parseAdmin, parseUser, oSpray)
+    outputFiles, numDomReuse, numDomPw, numAdminReuse, numAdminReuseUsers = writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parseAdmin, parseUser, oSpray, parseStat)
     report(outputFiles, uniqNT, wUsers, cParse, numDomReuse, numDomPw, numAdminReuse, numAdminReuseUsers, numSam, numWeakUsers, numWeakAdmins, hParse, genExcel, xpassLen, inFile, inDir)
 
 
