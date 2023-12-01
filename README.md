@@ -22,7 +22,7 @@ pip install pandas
 
 ## Usage
 ```
-usage: hashdump-reporter.py [-h] [-i inputFile | -d inputDir] [-o outputFile] [-l adminsFile] [-p hc.txt] [-admin] [-user] [-computer] [-history] [-x] [-pass-len MinPassLen]
+usage: hashdump-reporter.py [-h] [-i inputFile | -d inputDir] [-o outputFile] [-l adminsFile] [-p hc.txt] [-spray] [-admin] [-user] [-history] [-x] [-pass-len MinPassLen]
 
 Secretsdump Report Generator
 
@@ -33,10 +33,10 @@ options:
   -o outputFile, --outfile outputFile  prepend output file name
   -l adminsFile, --users adminsFile    text file of privileged users
   -p hc.txt, --potfile hc.txt          hashcat/john potfile containing <hash>:<plaintext
+  -spray                               create "<user> <lm:nt>" file for PtH
   -admin                               parse admin reuse
   -user                                parse all domain reuse
-  -computer                            Include computer hashes in <out>.uniqhashes. Does not affect TSVs
-  -history                             include NTDS password history in parsed NTDS TSV. Does not affect uniqhashes
+  -history                             include NTDS password history in parsed NTDS tsv. Does not affect uniqhashes
   -x, --excel                          generate excel formulas for tracking document
   -pass-len MinPassLen                 AD Minimum Password Length Policy setting. Only used for excel formulas
 ```
@@ -54,7 +54,7 @@ foreach ($group in $admingroups) { $adminusers += get-adgroupmember -rec $group 
 
 
 
-## Output formats
+## Output files and formats
 `hashdump-reporter.py` will generate output files, in TSV format for reporting files, based on user supplied arguments for the following:
 ### Cracking unique NT hashes
 Simply running `hashdump-reporter.py -i <NTDS/SAM>` will generate a parsed TSV output file and a plaintext file of unique NT hashes for submission to hashcat/hashtopolis:<p>
@@ -65,6 +65,18 @@ Simply running `hashdump-reporter.py -i <NTDS/SAM>` will generate a parsed TSV o
 6c9678ef8cf497ef2ea6c91a9f7ecf2a
 31d6cfe0d16ae931b73c59d7e0c089c0
 ```
+
+### Pass-the-Hash Spraying
+In multi-forest environments, it's common to see users and admins reuse usernames and passwords. To facilitate testing for cross-domain and cross-forest password reuse, `hashdump-reporter` can generate a plain text file containing `<samAccountName> <LMHash>:<NTHash>` for use with Metasploit's `smb_login` module. Alternatively, because the file is space separated between the username (samAccountName) and NTLM hash, the output file can be easily parsed for use with other tools, such as CrackMapExec. Generally speaking, only the NT hash is necessary for conducting pass-the-hash attacks, but Metasploit requires the full `<LM>:<NT>`.
+`-spray`<br>
+`secretsdump-spray.txt`<p>
+
+```
+Administrator aad3b435b51404eeaad3b435b51404ee:8846f7eaee8fb117ad06bdd830b7586c
+JohnDoe aad3b435b51404eeaad3b435b51404ee:8846f7eaee8fb117ad06bdd830b7586c
+Justin aad3b435b51404eeaad3b435b51404ee:6c9678ef8cf497ef2ea6c91a9f7ecf2a
+```
+
 
 ### Reporting Files
 ### Parsed NTDS/SAM

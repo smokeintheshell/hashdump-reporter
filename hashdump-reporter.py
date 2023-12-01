@@ -33,6 +33,7 @@ formBelowMinTemp = '=IF(ISNUMBER(I2),(IF(I2 < <RMINLEN>,"YES","-")),"-")'
 formIsAdmin = '=IFERROR(IFNA(IF(RIGHT(A2,LEN(A2)-FIND("\\",A2)) = VLOOKUP((RIGHT(A2,LEN(A2)-FIND("\\",A2))),P:P,1,FALSE),"YES","-"),"-"),"-")'
 formCrackPTemp = '="Cracked: " & TEXT(SUM(COUNTIF(F:F,"YES")/<RCRACKP>),"0.0%")'
 formSortIP = ''
+skipSprayUsers = ['krbtgt', 'guest']
 
 # simple class to make referencing users easier as opposed to ordered list or dictionary
 class winUser:
@@ -49,15 +50,17 @@ class winUser:
 def parseArgs():
     ap = argparse.ArgumentParser(description='Secretsdump Report Generator', formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=50))
     group = ap.add_mutually_exclusive_group()
+    #ap.add_argument('-i', '--ntds', required=False, dest='inFile', metavar='inputFile', action='store', help='input file')
+    #ap.add_argument('-d', '--dir', dest='inDir', metavar='inputDir', action='store', help='input dir for local hashes')
     group.add_argument('-i', '--ntds', dest='inFile', metavar='inputFile', action='store', help='input NTDS/SAM file')
     group.add_argument('-d', '--dir', dest='inDir', metavar='inputDir', action='store', help='directory of SAM files to parse')
     ap.add_argument('-o', '--outfile', dest='outFile', metavar='outputFile', action='store', help='prepend output file name')
     ap.add_argument('-l', '--users', dest='adminFile', required=False, metavar='adminsFile', action='store', help='text file of privileged users')
     ap.add_argument('-p', '--potfile', dest='potFile', metavar='hc.txt', action='store', help='hashcat/john potfile containing <hash>:<plaintext')
+    ap.add_argument('-spray', dest='oSpray', action='store_true', default=False, help='create "<user> <lm:nt>" file for PtH')
     ap.add_argument('-admin', dest='parseAdmin', default=False, action='store_true', help='parse admin reuse')
     ap.add_argument('-user', dest='parseUser', default=False, action='store_true', help='parse all domain reuse')
-    ap.add_argument('-computer', dest='parseComputer', default=False, action='store_true', help='Include computer hashes in <out>.uniqhashes. Does not affect TSVs')
-    ap.add_argument('-history', dest='parseHistory', default=False, action='store_true', help='include NTDS password history in parsed NTDS TSV. Does not affect uniqhashes')
+    ap.add_argument('-history', dest='parseHistory', default=False, action='store_true', help='include NTDS password history in parsed NTDS tsv. Does not affect uniqhashes')
     ap.add_argument('-x', '--excel', dest='genExcel', default=False, action='store_true', help='generate excel formulas for tracking document')
     ap.add_argument('-pass-len', dest='xpassLen', default=8, metavar='MinPassLen', action='store', help='AD Minimum Password Length Policy setting. Only used for excel formulas')
 
@@ -72,7 +75,7 @@ def parseArgs():
         cParse = "dir"
 
     if ((args.parseAdmin) and not (args.adminFile)):
-        print("-admin requires -l <adminFile>")
+        print("-admin requires -u <adminFile>")
         exit(1)
 
     if args.potFile:
@@ -80,7 +83,7 @@ def parseArgs():
     else:
         hParse = False
 
-    return args.inFile, args.outFile, args.inDir, args.adminFile, args.parseAdmin, args.parseUser, args.parseHistory, args.potFile, cParse, hParse, args.genExcel, args.xpassLen, args.parseComputer
+    return args.inFile, args.outFile, args.inDir, args.adminFile, args.parseAdmin, args.parseUser, args.parseHistory, args.potFile, cParse, hParse, args.genExcel, args.xpassLen, args.oSpray
 
 def samError(inDir):
     print("No files found in {inDir} that match the proper convention")
@@ -134,7 +137,7 @@ def parseDir(inDir):
         #print("{}\t{}\t{}\t{}\t{}".format(u.ipaddr, u.username, u.rid, u.nthash, u.isadmin))
     return wUsers, uniqNT, allNT, numSam
 
-def parseFile(inFile, outFile, adminFile, parseHistory=False, parseComputer=False, ip=None):
+def parseFile(inFile, outFile, adminFile, parseHistory=False, ip=None):
     allNT = []
     wUsers = []
     # set adminFile to empty list if not specified from commandline
@@ -156,9 +159,6 @@ def parseFile(inFile, outFile, adminFile, parseHistory=False, parseComputer=Fals
         nUser, nRID, nLM, nNT = line.split(":", 4)[0:4]
         # skip companyName for instances where the tester added a new account
         if ((not len(companyName) == 0) and companyName in nUser):
-            continue
-        # skip computer account hashes unles -computer
-        if (("$" in nUser) and not (parseComputer)):
             continue
         # grab every NT hash for uniqhashes file, then ditch all the computer accounts
         allNT.append(nNT)
@@ -257,7 +257,7 @@ def parseAllReuse(wUsers, allNT, uniqNT):
     del sharedUniq
     return domReuse, numDomReuse, numDomPw
 
-def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parseAdmin=False, parseUser=False):
+def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parseAdmin=False, parseUser=False, oSpray=False):
     outUniq = outFile + extUniq
     outTsv = outFile + extTsv
     outAdminReuse = f"{outFile}-pw-reuse-admin{extTsv}"
@@ -265,6 +265,7 @@ def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parse
     outAdminWeak = f"{outFile}-weak-pw-admin{extTsv}"
     outDomWeak = f"{outFile}-weak-pw-all{extTsv}"
     outCracked = f"{outFile}-cracked{extTsv}"
+    outSpray = f"{outFile}-spray.txt"
     outputFiles = {}
     numDomReuse = None
     numDomPw = None
@@ -300,6 +301,7 @@ def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parse
         if parseUser:
             domReuse, numDomReuse, numDomPw = parseAllReuse(wUsers, allNT, uniqNT)
             tableLines = formatOutput(domReuse, fType="reuseuser")
+            #print(';;; '.join(domReuse[0]['Users']))
             with open(outDomReuse, 'w') as fur:
                 fur.write("{}\n".format(headDomReuse))
                 for tl in tableLines:
@@ -307,6 +309,7 @@ def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parse
                 #for uHash in domReuse:
                     #for u in uHash['Users']:
                         #print("{}\t{}".format(u, uHash['Hash']))
+                        #f4.write("{}\t{}\n".format(u, uHash['Hash']))
             outputFiles['user'] = outDomReuse
 
     elif cParse == "dir":
@@ -324,6 +327,13 @@ def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parse
         with open(outUniq, 'w') as funiq:
             funiq.write('\n'.join(uniqNT))
         outputFiles['uniq'] = outUniq
+
+    if oSpray:
+        tableLines = formatOutput(wUsers, fType="spray")
+        with open(outSpray, 'w') as fspray:
+            for tl in tableLines:
+                fspray.write("{}\n".format(tl))
+        outputFiles['spray'] = outSpray
 
     if hParse:
         tableLines = formatOutput(crackedPW, fType="crackedpw")
@@ -356,7 +366,7 @@ def writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parse
 def formatOutput(data, fType):
     newTableLines = []
     if fType == "weakuser":
-        # goofy math to properly align the columns
+        # goofy ass math to properly align the columns
         if ((len(data) % 2) == 0):
             nC1 = len(data)//2
         else:
@@ -371,6 +381,19 @@ def formatOutput(data, fType):
     elif fType == "ntds":
         for u in data:
             newTableLines.append("{}\t{}\t{}\t{}".format(u.username, u.rid, u.lmhash, u.nthash))
+    
+    elif fType == "spray":
+        # skip computers, blank NT, known accounts
+        for u in data:
+            if ((u.nthash == nullNT) or ("$" in u.username)):
+                continue
+            if "\\" in u.username:
+                tUser = u.username.split("\\")[1]
+            else:
+                tUser = u.username
+            if tUser.lower() in skipSprayUsers:
+                continue
+            newTableLines.append("{} {}:{}".format(tUser, u.lmhash, u.nthash))
 
     elif fType == "local":
         for u in data:
@@ -409,6 +432,8 @@ def report(outputFiles, uniqNT, wUsers, cParse, numDomReuse, numDomPw, numAdminR
             statsReuse += f"User accounts reusing passwords:\t\t{numDomReuse}\n"
             statsReuse += f"Number of unique shared passwords:\t\t{numDomPw}\n"
             fmsg += "Output dom reuse TSV:\t\t\t{}\n".format(outputFiles['user'])
+    if 'spray' in outputFiles.keys():
+        fmsg += "Output PtH spray file:\t\t\t{}\n".format(outputFiles['spray'])
 
     elif cParse == "dir":
         fmsg += "Parsed {} SAM files in {}\n".format(numSam, inDir)
@@ -428,12 +453,12 @@ def report(outputFiles, uniqNT, wUsers, cParse, numDomReuse, numDomPw, numAdminR
 
     print(fmsg.strip())
     print(splitGen)
-    if (('admin' in outputFiles.keys()) or ('user' in outputFiles.keys())):
-        print(statsReuse.strip())
-        print(splitGen)
+    print(statsReuse.strip())
+    print(splitGen)
     if hParse:
         print(statsWeak.strip())
         print(splitGen)
+
     if genExcel:
         rFormula = generateFormulas(wUsers, cParse, xpassLen)
         print(splitForm)
@@ -511,11 +536,11 @@ def generateFormulas(wUsers, cParse, xpassLen=8):
     return rFormula
 
 def main():
-    inFile, outFile, inDir, adminFile, parseAdmin, parseUser, parseHistory, potFile, cParse, hParse, genExcel, xpassLen, parseComputer = parseArgs()
+    inFile, outFile, inDir, adminFile, parseAdmin, parseUser, parseHistory, potFile, cParse, hParse, genExcel, xpassLen, oSpray = parseArgs()
     if cParse == "file":
         if outFile is None:
             outFile = defaultOutFile
-        wUsers, uniqNT, allNT = parseFile(inFile, outFile, adminFile, parseHistory, parseComputer)
+        wUsers, uniqNT, allNT = parseFile(inFile, outFile, adminFile, parseHistory)
         '''
         if parseAdmin:
             adminReuse = parseAdminReuse(wUsers)
@@ -548,7 +573,7 @@ def main():
     print(parseUser)
     print(hParse)
     '''
-    outputFiles, numDomReuse, numDomPw, numAdminReuse, numAdminReuseUsers = writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parseAdmin, parseUser)
+    outputFiles, numDomReuse, numDomPw, numAdminReuse, numAdminReuseUsers = writeOutput(outFile, wUsers, uniqNT, allNT, cParse, hParse, crackedPW, parseAdmin, parseUser, oSpray)
     report(outputFiles, uniqNT, wUsers, cParse, numDomReuse, numDomPw, numAdminReuse, numAdminReuseUsers, numSam, numWeakUsers, numWeakAdmins, hParse, genExcel, xpassLen, inFile, inDir)
 
 
