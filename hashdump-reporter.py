@@ -25,7 +25,6 @@ splitFiles = "================ Output Files ================"
 splitGen = "==============================================\n"
 splitForm = "=============== Excel Formulas ==============="
 formReuseDom = '=COUNTIF(D$2:D$<RREUSE>, D2)'
-formReuseLoc = '=COUNTIF(F$2:F$<RREUSE>, F2)'
 formCrack = '=IFNA(IF(D2=VLOOKUP(D2,cracked!B:D,1,FALSE),"YES","-"),"-")'
 formMethod = '=IFNA(VLOOKUP(D2,cracked!B:D,3,FALSE),"-")'
 formPlain = '=IFNA(VLOOKUP(D2,cracked!B:D,2,FALSE),"-")'
@@ -33,7 +32,12 @@ formLength = '=IF(OR(H2="-",H2="N/A [BLANK]"),"-",LEN(H2))'
 formBelowMinTemp = '=IF(ISNUMBER(I2),(IF(I2 < <RMINLEN>,"YES","-")),"-")'
 formIsAdmin = '=IFERROR(IFNA(IF(RIGHT(A2,LEN(A2)-FIND("\\",A2)) = VLOOKUP((RIGHT(A2,LEN(A2)-FIND("\\",A2))),P:P,1,FALSE),"YES","-"),"-"),"-")'
 formCrackPTemp = '="Cracked: " & TEXT(SUM(COUNTIF(F:F,"YES")/<RCRACKP>),"0.0%")'
-formSortIP = ''
+formReuseLoc = '=COUNTIF(F$2:F$<RREUSE>, F2)'
+formCrackLoc = '=IFNA(IF(F2=VLOOKUP(F2,cracked!B:D,1,FALSE),"YES","-"),"-")'
+formMethodLoc = '=IFNA(VLOOKUP(F2,cracked!B:D,3,FALSE),"-")'
+formPlainLoc = '=IFNA(VLOOKUP(F2,cracked!B:D,2,FALSE),"-")'
+formSortIP = '=(VALUE(LEFT(A2,FIND(".",A2)-1))*10^9)+(VALUE(LEFT(RIGHT(A2,LEN(A2)-FIND(".",A2)),FIND(".",RIGHT(A2,LEN(A2)-FIND(".",A2)))-1))*10^6)+VALUE(LEFT(RIGHT(RIGHT(A2,LEN(A2)-FIND(".",A2)),LEN(RIGHT(A2,LEN(A2)-FIND(".",A2)))-FIND(".",RIGHT(A2,LEN(A2)-FIND(".",A2)))),FIND(".",RIGHT(RIGHT(A2,LEN(A2)-FIND(".",A2)),LEN(RIGHT(A2,LEN(A2)-FIND(".",A2)))-FIND(".",RIGHT(A2,LEN(A2)-FIND(".",A2)))))-1))*10^3+VALUE(RIGHT(RIGHT(RIGHT(A2,LEN(A2)-FIND(".",A2)),LEN(RIGHT(A2,LEN(A2)-FIND(".",A2)))-FIND(".",RIGHT(A2,LEN(A2)-FIND(".",A2)))),LEN(RIGHT(RIGHT(A2,LEN(A2)-FIND(".",A2)),LEN(RIGHT(A2,LEN(A2)-FIND(".",A2)))-FIND(".",RIGHT(A2,LEN(A2)-FIND(".",A2)))))-FIND(".",RIGHT(RIGHT(A2,LEN(A2)-FIND(".",A2)),LEN(RIGHT(A2,LEN(A2)-FIND(".",A2)))-FIND(".",RIGHT(A2,LEN(A2)-FIND(".",A2)))))))'
+
 skipSprayUsers = ['krbtgt', 'guest']
 statStrEnabled = "(status=Enabled)"
 statStrDisabled = "(status=Disabled)"
@@ -57,7 +61,7 @@ def parseArgs():
     apInput = ap.add_mutually_exclusive_group(required=True)
     apFilter = ap.add_mutually_exclusive_group()
     apInput.add_argument('-i', '--ntds', dest='inFile', metavar='inputFile', action='store', help='[X] input NTDS/SAM file')
-    apInput.add_argument('-d', '--dir', dest='inDir', metavar='inputDir', action='store', help='[X] directory of SAM files to parse. files must be named like 1.1.1.1[_-]secretsdump.sam')
+    apInput.add_argument('-d', '--dir', dest='inDir', metavar='inputDir', action='store', help='[X] directory of SAM files to parse. files must be named like <IP>.sam')
     ap.add_argument('-o', '--outfile', dest='outFile', metavar='outputFile', action='store', help='prepend output file name')
     ap.add_argument('-l', '--users', dest='adminFile', metavar='adminsFile', action='store', help='text file of privileged users')
     ap.add_argument('-p', '--potfile', dest='potFile', metavar='hc.txt', action='store', help='hashcat/john potfile containing <hash>:<plaintext>')
@@ -82,7 +86,7 @@ def parseArgs():
         cParse = "dir"
 
     if ((args.parseAdmin) and not (args.adminFile)):
-        print("-admin requires -u <adminFile>")
+        print("-admin requires -l <adminFile>")
         exit(1)
 
     if args.potFile:
@@ -93,10 +97,11 @@ def parseArgs():
     return args.inFile, args.outFile, args.inDir, args.adminFile, args.parseAdmin, args.parseUser, args.parseHistory, args.potFile, cParse, hParse, args.genExcel, args.xpassLen, args.oSpray, args.parseStat, args.pEnable, args.pComp
 
 def samError(inDir):
-    print("No files found in {inDir} that match the proper convention")
+    print(f"No files found in {inDir} that match the proper convention")
     print("SAM files must be named with one of the following conventions:")
     print("<IP>_[whatever].sam")
     print("<IP>-[whatever].sam")
+    print("<IP>.sam")
     exit(1)
 
 def parseDir(inDir):
@@ -115,21 +120,25 @@ def parseDir(inDir):
             fileIP = fileName.split('_')[0]
         elif '-' in fileName:
             fileIP = fileName.split('-')[0]
+        # support <IP>.sam
         else:
-            samError(inDir)
+            fileIP = fileName.split('.sam')[0]
         try:
             if ip_address(fileIP):
                 samFiles.append(tmpFile)
         except:
             pass
     if len(samFiles) == 0:
-        samError
+        samError(inDir)
 
     for samFile in samFiles:
         if '_' in samFile:
             samIP = os.path.basename(samFile).split('_')[0]
         elif '-' in samFile:
             samIP = os.path.basename(samFile).split('-')[0]
+        # support <IP>.sam
+        else:
+            samIP = os.path.basename(samFile).split('.sam')[0]
         with open(samFile, 'r') as sam:
             samLines = sam.readlines()
         for line in samLines:
@@ -602,16 +611,19 @@ def generateFormulas(wUsers, cParse, xpassLen=8):
         rFormula += "{}:\t\t{}".format(colformCrackP, formCrackP)
         #rFormula += "{}:\t\t{}".format()
     elif cParse == "dir":
+        # fix column references, add sort ip formula
         formReuse = formReuseLoc.replace('<RREUSE>', str(numAccLines))
-        colformReuse = "F"
-        colformCrack = "G"
-        colformMethod = "H"
-        colformPlain = "I"
+        colformReuse = "G"
+        colformCrack = "H"
+        colformMethod = "I"
+        colformPlain = "J"
+        colformSort = "K"
         rFormula = ""
         rFormula += "{}:\t\t{}\n".format(colformReuse, formReuse)
-        rFormula += "{}:\t\t{}\n".format(colformCrack, formCrack)
-        rFormula += "{}:\t\t{}\n".format(colformMethod, formMethod)
-        rFormula += "{}:\t\t{}\n".format(colformPlain, formPlain)
+        rFormula += "{}:\t\t{}\n".format(colformCrack, formCrackLoc)
+        rFormula += "{}:\t\t{}\n".format(colformMethod, formMethodLoc)
+        rFormula += "{}:\t\t{}\n".format(colformPlain, formPlainLoc)
+        rFormula += "{}:\t\t{}\n".format(colformSort, formSortIP)
 
     return rFormula
 
